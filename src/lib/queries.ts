@@ -82,7 +82,13 @@ export interface DBDestination {
  * cover image, and pricing. Used by the tours listing page.
  */
 export async function getPublishedTours(): Promise<DBTour[]> {
-  const supabase = await createClient();
+  let supabase;
+  try {
+    supabase = await createClient();
+  } catch (error) {
+    console.error("[getPublishedTours]", error instanceof Error ? error.message : "Supabase unavailable.");
+    return [];
+  }
 
   const { data, error } = await supabase
     .from("tours")
@@ -112,7 +118,13 @@ export async function getPublishedTours(): Promise<DBTour[]> {
  * Used by destination pages.
  */
 export async function getToursByCountry(countryCode: string): Promise<DBTour[]> {
-  const supabase = await createClient();
+  let supabase;
+  try {
+    supabase = await createClient();
+  } catch (error) {
+    console.error("[getToursByCountry]", error instanceof Error ? error.message : "Supabase unavailable.");
+    return [];
+  }
 
   const { data, error } = await supabase
     .from("tours")

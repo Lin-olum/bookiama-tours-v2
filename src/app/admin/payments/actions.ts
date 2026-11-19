@@ -40,7 +40,7 @@ export async function createQuotationPaymentLink(
     return { status: "error", message: "Only accepted quotations can be paid." };
   }
   if (quotation.currency_code !== "KES") {
-    return { status: "error", message: "Pesapal checkout is currently configured for KES quotations only." };
+    return { status: "error", message: "M-Pesa checkout is currently configured for KES quotations only." };
   }
   if (quotation.valid_until && quotation.valid_until < new Date().toISOString().slice(0, 10)) {
     return { status: "error", message: "This quotation has expired. Update its validity before requesting payment." };

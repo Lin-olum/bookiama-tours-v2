@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   createQuotationPaymentLink,
   type PaymentLinkActionState,
@@ -17,6 +17,13 @@ export default function PaymentLinkForm({
     createQuotationPaymentLink,
     initialState,
   );
+  const [copied, setCopied] = useState(false);
+
+  async function copyPaymentLink() {
+    if (state.status !== "success") return;
+    await navigator.clipboard.writeText(state.paymentUrl);
+    setCopied(true);
+  }
 
   return (
     <div className="admin-payment-link">
@@ -29,16 +36,21 @@ export default function PaymentLinkForm({
       {state.status === "success" && (
         <div className="admin-payment-link-result" role="status">
           <p>{state.message}</p>
-          <a href={state.paymentUrl} target="_blank" rel="noreferrer">
-            Open payment page
-          </a>
+          <div className="admin-payment-link-actions">
+            <a href={state.paymentUrl} target="_blank" rel="noreferrer">
+              Open customer payment page
+            </a>
+            <button type="button" onClick={copyPaymentLink}>
+              {copied ? "Link copied" : "Copy link"}
+            </button>
+          </div>
           <input
             aria-label="Customer payment link"
             readOnly
             value={state.paymentUrl}
             onFocus={(event) => event.currentTarget.select()}
           />
-          <small>Copy this link and send it to the customer.</small>
+          <small>Send this link to the customer by email or phone.</small>
         </div>
       )}
       {state.status === "error" && (

@@ -6,11 +6,13 @@ import {
   getPesapalAccessToken,
   submitPesapalOrder,
 } from "@/lib/payments/pesapal";
+import { initiateDarajaStkPush, normalizeKenyanPhone } from "@/lib/payments/daraja";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export type CheckoutActionState =
   | { status: "idle" }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string }
+  | { status: "success"; message: string };
 
 async function createCheckoutSession(paymentToken: string) {
   const notificationId = process.env.PESAPAL_IPN_ID;
@@ -157,4 +159,110 @@ export async function startPesapalCheckout(
   }
 
   redirect(checkoutUrl);
+}
+
+export async function startDarajaPayment(
+  _previousState: CheckoutActionState,
+  formData: FormData,
+): Promise<CheckoutActionState> {
+  const paymentToken = formData.get("payment_token");
+  const rawPhone = formData.get("phone");
+  if (typeof paymentToken !== "string" || !/^[A-Za-z0-9_-]{40,50}$/.test(paymentToken)) {
+    return { status: "error", message: "This payment link is invalid." };
+  }
+  if (typeof rawPhone !== "string") {
+    return { status: "error", message: "Enter the M-Pesa phone number." };
+  }
+  const phone = normalizeKenyanPhone(rawPhone);
+  if (!phone) {
+    return { status: "error", message: "Enter a valid Kenyan M-Pesa phone number, for example 0712345678." };
+  }
+
+  const supabase = createServiceClient();
+  const { data: payment, error: paymentError } = await supabase
+    .from("custom_trip_payments")
+    .select("id,quotation_id,merchant_reference,order_tracking_id,amount,currency_code,status")
+    .eq("payment_token", paymentToken)
+    .maybeSingle();
+  if (paymentError || !payment) {
+    return { status: "error", message: "Could not load this payment request." };
+  }
+  if (!["created", "pending"].includes(payment.status) || payment.order_tracking_id) {
+    return { status: "error", message: "An M-Pesa request is already active or this payment is no longer available." };
+  }
+
+  const { data: quotation, error: quotationError } = await supabase
+    .from("custom_trip_quotations")
+    .select("custom_trip_request_id,status,currency_code,total_amount,valid_until")
+    .eq("id", payment.quotation_id)
+    .maybeSingle();
+  if (
+    quotationError || !quotation || quotation.status !== "accepted" ||
+    quotation.currency_code !== "KES" ||
+    Number(quotation.total_amount) !== Number(payment.amount) ||
+    (quotation.valid_until && quotation.valid_until < new Date().toISOString().slice(0, 10))
+  ) {
+    return { status: "error", message: "This quotation is no longer available for payment." };
+  }
+
+  const { data: request, error: requestError } = await supabase
+    .from("custom_trip_requests")
+    .select("request_reference")
+    .eq("id", quotation.custom_trip_request_id)
+    .maybeSingle();
+  if (requestError || !request) {
+    return { status: "error", message: "Could not verify the trip payment reference." };
+  }
+
+  const { data: claimedPayment, error: claimError } = await supabase
+    .from("custom_trip_payments")
+    .update({ status: "initiating", provider: "daraja" })
+    .eq("id", payment.id)
+    .in("status", ["created", "pending"])
+    .select("id")
+    .maybeSingle();
+  if (claimError || !claimedPayment) {
+    return { status: "error", message: "The payment request is already being prepared. Please try again shortly." };
+  }
+
+  try {
+    const amount = Number(payment.amount);
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw new Error("Daraja requires a positive whole-number KES amount.");
+    }
+    const siteUrl = getPublicSiteUrl();
+    const stk = await initiateDarajaStkPush({
+      phone,
+      amount,
+      accountReference: request.request_reference,
+      description: `Trip ${request.request_reference}`,
+      callbackUrl: `${siteUrl}/api/payments/mpesa/callback`,
+    });
+    if (!stk.checkoutRequestId) {
+      throw new Error("Safaricom did not return a checkout request ID.");
+    }
+
+    const { error: updateError } = await supabase
+      .from("custom_trip_payments")
+      .update({
+        order_tracking_id: stk.checkoutRequestId,
+        checkout_url: null,
+        status: "pending",
+        provider_status: stk.customerMessage,
+      })
+      .eq("id", payment.id)
+      .eq("status", "initiating");
+    if (updateError) {
+      throw new Error("Could not save the M-Pesa request.");
+    }
+    return { status: "success", message: "Check your phone and enter your M-Pesa PIN. Then refresh this page after a moment." };
+  } catch (error) {
+    await supabase
+      .from("custom_trip_payments")
+      .update({ status: "created", provider_status: null })
+      .eq("id", payment.id)
+      .eq("status", "initiating");
+    console.error("[payments.daraja.checkout]", error instanceof Error ? error.message : "Unknown M-Pesa error.");
+    return { status: "error", message: "We could not start the M-Pesa prompt. Please try again or contact Bokiama Tours." };
+  }
 }

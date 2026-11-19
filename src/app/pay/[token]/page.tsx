@@ -61,7 +61,8 @@ export default async function PaymentPage({
   const payable =
     quotation.status === "accepted" &&
     !expired &&
-    ["created", "pending"].includes(payment.status);
+    ["created", "pending"].includes(payment.status) &&
+    (payment.status === "created" || !payment.order_tracking_id);
 
   return (
     <main className="payment-page">
@@ -80,9 +81,23 @@ export default async function PaymentPage({
             <h1>Please contact Bokiama Tours.</h1>
             <p>This payment request is no longer active. We can arrange another payment link or help with a refund.</p>
           </>
+        ) : payment.status === "pending" && payment.order_tracking_id ? (
+          <>
+            <p className="payment-eyebrow">M-PESA PROMPT SENT</p>
+            <h1>Check your phone</h1>
+            <p>Approve the Safaricom M-Pesa prompt using your M-Pesa PIN.</p>
+            <div className="payment-amount">
+              <span>Payment amount</span>
+              <strong>KES {Number(payment.amount).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            </div>
+            <p className="payment-notice" role="status">
+              Once approval is complete, refresh this page to verify your payment confirmation.
+            </p>
+            <a className="payment-refresh" href={`/pay/${token}`}>Refresh payment status</a>
+          </>
         ) : (
           <>
-            <p className="payment-eyebrow">SECURE PAYMENT · M-PESA &amp; CARDS</p>
+            <p className="payment-eyebrow">SECURE PAYMENT · M-PESA</p>
             <h1>Complete your trip payment</h1>
             <p>For {request.contact_name} · Trip reference {request.request_reference}</p>
             <div className="payment-amount">
@@ -97,7 +112,7 @@ export default async function PaymentPage({
             {payable ? (
               <>
                 <PayButton paymentToken={token} />
-                <p className="payment-footnote">M-Pesa and card options are provided by Pesapal. Bokiama never receives or stores your card details.</p>
+                <p className="payment-footnote">Safaricom Daraja sends a secure M-Pesa prompt to the phone number you enter. Bokiama never receives or stores your M-Pesa PIN.</p>
               </>
             ) : (
               <p className="payment-notice">This quotation is not currently payable. Please contact Bokiama Tours for assistance.</p>

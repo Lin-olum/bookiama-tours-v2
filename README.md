@@ -73,6 +73,58 @@ Other currencies, PayPal, Apple Pay and Google Pay are not enabled by this
 initial integration; availability should be confirmed with the payment
 provider before adding them.
 
+### Safaricom Daraja M-Pesa payments
+
+Accepted KES quotations can receive a secure payment link from
+`/admin/quotations`. The customer enters a Kenyan M-Pesa phone number on that
+link and Daraja sends a secure STK Push prompt to the handset. The app records
+the payment only after Safaricom posts a successful callback and verifies that
+the amount matches the quotation.
+
+Before enabling M-Pesa payments on the hosted site:
+
+1. Apply `supabase/migrations/20261110130000_create_pesapal_quotation_payments.sql`
+   and `supabase/migrations/20261118000000_add_daraja_payment_support.sql`.
+2. Create a Safaricom Daraja application for the organization's Lipa Na M-Pesa
+   PayBill or Till account. Obtain the consumer key, consumer secret, shortcode,
+   and passkey.
+3. Configure these server environment variables (never use `NEXT_PUBLIC_` for
+   secrets):
+
+   | Variable | Value |
+   | --- | --- |
+   | `MPESA_ENVIRONMENT` | `sandbox` while testing; `production` after approval |
+   | `MPESA_CONSUMER_KEY` | Daraja application consumer key |
+   | `MPESA_CONSUMER_SECRET` | Daraja application consumer secret |
+   | `MPESA_SHORTCODE` | M-Pesa PayBill or Till number |
+   | `MPESA_PASSKEY` | Daraja Lipa Na M-Pesa passkey |
+   | `NEXT_PUBLIC_SITE_URL` | Canonical HTTPS site origin, e.g. `https://example.com` |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key; server-only secret |
+
+4. Register and allow this publicly reachable callback URL with Daraja:
+   `https://your-site-domain.com/api/payments/mpesa/callback`
+5. Test with Daraja sandbox credentials and a sandbox phone before switching
+   `MPESA_ENVIRONMENT` to `production`. The callback endpoint must remain public;
+   do not add authentication or an origin redirect to it.
+
+Payment callbacks are authoritative. A missing or failed callback should leave
+the payment pending or failed rather than marking it paid. Refunds must be
+arranged through the M-Pesa organization account and recorded outside the app.
+
+Payment links can only be created for accepted, unexpired KES quotations.
+The current integration is for M-Pesa STK Push only.
+
+## Environment setup
+
+Copy `.env.example` to `.env.local` for local development and set:
+
+- `NEXT_PUBLIC_SUPABASE_URL` — your Supabase project URL.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — your Supabase publishable key (or anon key).
+- `SUPABASE_SERVICE_ROLE_KEY` — the Supabase service-role key, server-only.
+- `NEXT_PUBLIC_SITE_URL` — the canonical site URL.
+
+Restart `npm run dev` after changing environment variables. Pages using static fallback data will continue working without Supabase; database-backed admin and dynamic tour features require the variables above.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

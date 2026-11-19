@@ -181,8 +181,14 @@ export async function getPesapalTransactionStatus(orderTrackingId: string) {
 }
 
 export function getPublicSiteUrl() {
-  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  if (!configuredUrl) throw new Error("NEXT_PUBLIC_SITE_URL is not configured.");
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "https://bookiama-tours-v2.vercel.app");
+
   const url = new URL(configuredUrl);
   if (
     url.protocol !== "https:" &&

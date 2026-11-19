@@ -158,6 +158,18 @@
 .admin-payment-link button:hover { background: #41644a; }
 .admin-payment-link button:disabled { opacity: .6; cursor: wait; }
 
+.admin-payment-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-payment-link-actions button {
+  min-height: 32px;
+  background: #41644a;
+}
+
 .admin-payment-link-result {
   display: grid;
   gap: 8px;
